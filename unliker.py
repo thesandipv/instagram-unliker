@@ -1,11 +1,15 @@
 import codecs
 import json
 import os
+import sys
 from instagram_private_api import Client, ClientError, ClientTwoFactorRequiredError
 
 # =======================================
 
-like_removal_amount = 30
+if len(sys.argv) > 1 and sys.argv[1] != None:
+    like_removal_amount = sys.argv[1]
+else:
+    like_removal_amount = 30
 quiet_mode = False
 username = "YOUR_USERNAME"
 password = "YOUR_PASSWORD"
@@ -38,10 +42,12 @@ class Unliker:
 
         if not os.path.isfile(settings_file):
             println("Settings file not found, creating new one...")
-            self.api = Client(username, password, on_login=lambda x: self.on_login_callback(x, settings_file))
+            self.api = Client(
+                username, password, on_login=lambda x: self.on_login_callback(x, settings_file))
         else:
             with open(settings_file) as file_data:
-                cached_settings = json.load(file_data, object_hook=self.from_json)
+                cached_settings = json.load(
+                    file_data, object_hook=self.from_json)
             println("Reusing settings...")
             self.api = Client(username, password, settings=cached_settings)
 
@@ -55,7 +61,8 @@ class Unliker:
             two_factor_info = response["two_factor_info"]
             phone_number_tail = two_factor_info["obfuscated_phone_number"]
             two_factor_identifier = two_factor_info['two_factor_identifier']
-            verification_code = input(f"Verification code of authenticator or SMS (phone number ****{phone_number_tail}): ")
+            verification_code = input(
+                f"Verification code of authenticator or SMS (phone number ****{phone_number_tail}): ")
             try:
                 println("Logging in again with 2FA...")
                 self.api.login2fa(two_factor_identifier, verification_code)
@@ -81,7 +88,8 @@ class Unliker:
                 try:
                     self.api.delete_like(post_id)
                     removed += 1
-                    println(f"{removed}: Deleted {post_id} by {p['user']['username']}")
+                    println(f"{removed}: Deleted {post_id} by {
+                            p['user']['username']}")
                 except Exception as e:
                     println("\nRate limit most likely reached. Try again soon.")
                     println(f"Deleted {removed} liked posts.")
