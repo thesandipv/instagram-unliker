@@ -7,7 +7,7 @@ from instagram_private_api import Client, ClientError, ClientTwoFactorRequiredEr
 # =======================================
 
 if len(sys.argv) > 1 and sys.argv[1] != None:
-    like_removal_amount = sys.argv[1]
+    like_removal_amount = int(sys.argv[1])
 else:
     like_removal_amount = 30
 quiet_mode = False
