@@ -2,7 +2,10 @@ import codecs
 import json
 import os
 import sys
-from instagram_private_api import Client, ClientError, ClientTwoFactorRequiredError
+import datetime
+from instagram_private_api import (Client, ClientError, ClientTwoFactorRequiredError,
+                                   ClientCookieExpiredError,  ClientLoginRequiredError, ClientLoginError,
+                                   __version__ as client_version)
 
 # =======================================
 
@@ -37,23 +40,10 @@ class Unliker:
             json.dump(cache_settings, outfile, default=self.to_json)
             println("SAVED: {0!s}".format(new_settings_file))
 
-    def __init__(self):
-        settings_file = "settings.json"
-
-        if not os.path.isfile(settings_file):
-            println("Settings file not found, creating new one...")
-            self.api = Client(
-                username, password, on_login=lambda x: self.on_login_callback(x, settings_file))
-        else:
-            with open(settings_file) as file_data:
-                cached_settings = json.load(
-                    file_data, object_hook=self.from_json)
-            println("Reusing settings...")
-            self.api = Client(username, password, settings=cached_settings)
-
+    def login(api: Client):
         try:
             println("Logging in via username and password...")
-            self.api.login()
+            api.login()
             println("Login successful.")
         except ClientTwoFactorRequiredError as e:
             println("Login failed, requiring 2FA!")
@@ -65,13 +55,61 @@ class Unliker:
                 f"Verification code of authenticator or SMS (phone number ****{phone_number_tail}): ")
             try:
                 println("Logging in again with 2FA...")
-                self.api.login2fa(two_factor_identifier, verification_code)
+                api.login2fa(
+                    two_factor_identifier, verification_code)
                 println("Login with 2FA successful.")
             except ClientError as e:
                 println("Login with 2FA failed as well.")
                 println(e.error_response)
                 print(output)
                 exit()
+
+    def __init__(self):
+        print('Client version: {0!s}'.format(client_version))
+        device_id = None
+        settings_file = "settings.json"
+
+        try:
+            if not os.path.isfile(settings_file):
+                println("Settings file not found, creating new one...")
+                self.api = Client(
+                    username, password, on_login=lambda x: self.on_login_callback(x, settings_file))
+
+                self.login(self.api)
+            else:
+                with open(settings_file) as file_data:
+                    cached_settings = json.load(
+                        file_data, object_hook=self.from_json)
+                println("Reusing settings...")
+                device_id = cached_settings.get('device_id')
+                self.api = Client(username, password, settings=cached_settings)
+        except (ClientCookieExpiredError, ClientLoginRequiredError) as e:
+            print(
+                'ClientCookieExpiredError/ClientLoginRequiredError: {0!s}'.format(e))
+            # Login expired
+            # Do relogin but use default ua, keys and such
+            self.api = Client(
+                username, password,
+                device_id=device_id,
+                on_login=lambda x: self.on_login_callback(x, settings_file))
+
+            self.login(self.api)
+
+        except ClientLoginError as e:
+            print('ClientLoginError {0!s}'.format(e))
+            exit(9)
+        except ClientError as e:
+            print('ClientError {0!s} (Code: {1:d}, Response: {2!s})'.format(
+                e.msg, e.code, e.error_response))
+            exit(9)
+        except Exception as e:
+            print('Unexpected Exception: {0!s}'.format(e))
+            exit(99)
+
+        # Show when login expires
+        cookie_expiry = self.api.cookie_jar.auth_expires
+        print('Cookie Expiry: {0!s}'.format(datetime.datetime.fromtimestamp(
+            cookie_expiry).strftime('%Y-%m-%dT%H:%M:%SZ')))
 
     def unlike(self, remove_count):
         removed = 0
