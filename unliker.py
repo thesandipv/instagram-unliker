@@ -40,7 +40,7 @@ class Unliker:
             json.dump(cache_settings, outfile, default=self.to_json)
             println("SAVED: {0!s}".format(new_settings_file))
 
-    def login(api: Client):
+    def login(self, api: Client):
         try:
             println("Logging in via username and password...")
             api.login()
