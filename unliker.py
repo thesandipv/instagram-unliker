@@ -3,16 +3,26 @@ import json
 import os
 import sys
 import datetime
+from time import sleep
 from instagram_private_api import (Client, ClientError, ClientTwoFactorRequiredError,
                                    ClientCookieExpiredError,  ClientLoginRequiredError, ClientLoginError,
                                    __version__ as client_version)
 
 # =======================================
 
-if len(sys.argv) > 1 and sys.argv[1] != None:
-    like_removal_amount = int(sys.argv[1])
+if len(sys.argv) > 2 and sys.argv[2] != None:
+    like_removal_amount = int(sys.argv[2])
 else:
-    like_removal_amount = 30
+    like_removal_amount = int(input(f"Enter unlike count:"))
+
+if len(sys.argv) > 1 and sys.argv[1] != None:
+    filter_username = sys.argv[1]
+else:
+    filter_username = input(
+        f"Enter username, Enter N to delete likes of all posts. [USERNAME/N]:")
+    if filter_username == "N":
+        filter_username = None
+
 quiet_mode = False
 username = "YOUR_USERNAME"
 password = "YOUR_PASSWORD"
@@ -111,40 +121,69 @@ class Unliker:
         print('Cookie Expiry: {0!s}'.format(datetime.datetime.fromtimestamp(
             cookie_expiry).strftime('%Y-%m-%dT%H:%M:%SZ')))
 
-    def unlike(self, remove_count):
+    def unlike(self, remove_count, username):
         removed = 0
+        liked = self.api.feed_liked()
 
         while removed < remove_count:
-            liked = self.api.feed_liked()
             count_reached = False
+            next_max_id = liked['next_max_id']
+            println(f"Next Max Id: {next_max_id}")
 
-            println("Beginning deletion of liked posts...")
+            if username != None:
+                println(f"Beginning deletion of liked posts of {username}")
 
-            for p in liked['items']:
-                post_id = p['id']
+                for p in liked['items']:
+                    post_id = p['id']
 
-                try:
-                    self.api.delete_like(post_id)
-                    removed += 1
-                    println(f"{removed}: Deleted {post_id} by {
+                    try:
+                        if (p['user']['username']) == username:
+                            self.api.delete_like(post_id)
+                            removed += 1
+                            println(f"{removed}: Deleted {post_id} by {
+                                    p['user']['username']}")
+                    except Exception as e:
+                        println(
+                            "\nRate limit most likely reached. Try again soon.")
+                        println(f"Deleted {removed} liked posts.")
+                        println("Exception: ")
+                        println(e)
+                        print(output)
+                        return
+
+                    if removed >= remove_count:
+                        count_reached = True
+                        break
+            else:
+                println(f"Beginning deletion of liked posts...")
+
+                for p in liked['items']:
+                    post_id = p['id']
+
+                    try:
+                        self.api.delete_like(post_id)
+                        removed += 1
+                        println(f"{removed}: Deleted {post_id} by {
                             p['user']['username']}")
-                except Exception as e:
-                    println("\nRate limit most likely reached. Try again soon.")
-                    println(f"Deleted {removed} liked posts.")
-                    println("Exception: ")
-                    println(e)
-                    print(output)
-                    return
+                    except Exception as e:
+                        println(
+                            "\nRate limit most likely reached. Try again soon.")
+                        println(f"Deleted {removed} liked posts.")
+                        println("Exception: ")
+                        println(e)
+                        print(output)
+                        return
 
-                if removed >= remove_count:
-                    count_reached = True
-                    break
+                    if removed >= remove_count:
+                        count_reached = True
+                        break
 
             if not count_reached:
                 println("Grabbing more posts...")
+                sleep(1)
 
                 while True:
-                    liked = self.api.feed_liked()
+                    liked = self.api.feed_liked(max_id=next_max_id)
                     if liked['status'] == 'ok':
                         break
 
@@ -168,4 +207,4 @@ def println(line):
 
 print(f"Starting script to delete {like_removal_amount} likes...")
 unliker = Unliker()
-unliker.unlike(like_removal_amount)
+unliker.unlike(like_removal_amount, filter_username)
